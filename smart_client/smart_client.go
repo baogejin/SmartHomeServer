@@ -57,7 +57,6 @@ func (this *SmartClient) Start(c net.Conn) {
 					this.Kick()
 					break
 				}
-				fmt.Println(msg.Seq, msg.MsgId)
 				if !this.ProcessMsg(msg.MsgId, msg.Data) {
 					return
 				}
@@ -74,6 +73,9 @@ func (this *SmartClient) ProcessMsg(msgId uint32, data []byte) bool {
 	case uint32(message.MsgId_RegisterReq):
 		this.handleRegister(data)
 		break
+	case uint32(message.MsgId_ReportStatusReq):
+		this.handleReportStatus(data)
+		break
 	default:
 		fmt.Println("没有找到消息:", msgId)
 	}
@@ -87,7 +89,7 @@ func (this *SmartClient) Kick() {
 	this.conn.Close()
 }
 
-func (this *SmartClient) sendAck(ack message.BaseAck) {
+func (this *SmartClient) sendMsg(ack message.BaseMsg) {
 	data := ack.Encode()
 	length := len(data)
 	bf := &message.ByteBuffer{}
@@ -96,12 +98,11 @@ func (this *SmartClient) sendAck(ack message.BaseAck) {
 	bf.WriteInt32(ack.GetMsgId())
 	bf.Write(data)
 	this.conn.Write(bf.GetBuffer())
-	fmt.Println(12+length, len(bf.GetBuffer()))
 }
 
 func (this *SmartClient) handleRegister(data []byte) {
 	if this.registed {
-		this.sendAck(&message.RegisterAck{Ret: message.Result_AlreaedRegistered})
+		this.sendMsg(&message.RegisterAck{Ret: message.Result_AlreaedRegistered})
 		fmt.Println("设备注册过了")
 		return
 	}
@@ -110,6 +111,22 @@ func (this *SmartClient) handleRegister(data []byte) {
 	this.itemType = define.ItemType(msg.ItemType)
 	this.name = msg.Name
 	this.registed = true
-	this.sendAck(&message.RegisterAck{Ret: message.Result_Success})
+	this.sendMsg(&message.RegisterAck{Ret: message.Result_Success})
 	fmt.Println("设备注册成功")
+}
+
+func (this *SmartClient) handleReportStatus(data []byte) {
+	msg := &message.ReportStatusReq{}
+	msg.Decode(data)
+	fmt.Println("状态上报，名称:", this.name, ",状态:", msg.Status)
+	this.sendMsg(&message.ReportStatusAck{Ret: message.Result_Success})
+	// if msg.Status == 0 {
+	// 	this.ChangeStatus(1)
+	// }
+}
+
+func (this *SmartClient) ChangeStatus(status int32) {
+	fmt.Println("正在改变物品状态，名称:", this.name, "目标状态:", status)
+	msg := &message.ChangeStatusPush{Status: status}
+	this.sendMsg(msg)
 }
