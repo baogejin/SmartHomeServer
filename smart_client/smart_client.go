@@ -2,6 +2,7 @@ package smart_client
 
 import (
 	"SmartHomeServer/define"
+	"SmartHomeServer/eventbus"
 	"SmartHomeServer/message"
 	"bytes"
 	"encoding/binary"
@@ -14,8 +15,10 @@ type SmartClient struct {
 	conn     net.Conn
 	seq      uint32
 	registed bool
-	itemType define.ItemType
-	name     string
+	ItemType define.ItemType
+	Name     string
+	Uid      int32
+	Status   int32
 }
 
 func (this *SmartClient) Start(c net.Conn) {
@@ -57,9 +60,7 @@ func (this *SmartClient) Start(c net.Conn) {
 					this.Kick()
 					break
 				}
-				if !this.ProcessMsg(msg.MsgId, msg.Data) {
-					return
-				}
+				this.ProcessMsg(msg.MsgId, msg.Data)
 				recvBuf.Next(int(needLen))
 			} else {
 				break
@@ -68,34 +69,31 @@ func (this *SmartClient) Start(c net.Conn) {
 	}
 }
 
-func (this *SmartClient) ProcessMsg(msgId uint32, data []byte) bool {
+func (this *SmartClient) ProcessMsg(msgId uint32, data []byte) {
 	switch msgId {
 	case uint32(message.MsgId_RegisterReq):
 		this.handleRegister(data)
-		break
 	case uint32(message.MsgId_ReportStatusReq):
 		this.handleReportStatus(data)
-		break
 	default:
 		fmt.Println("没有找到消息:", msgId)
 	}
-	return true
 }
 
 func (this *SmartClient) Kick() {
-	if this.registed {
-		//todo
+	if this.registed && this.Uid > 0 {
+		GetClientMgr().DelClient(this.Uid)
 	}
 	this.conn.Close()
 }
 
-func (this *SmartClient) sendMsg(ack message.BaseMsg) {
-	data := ack.Encode()
+func (this *SmartClient) sendMsg(msg message.BaseMsg) {
+	data := msg.Encode()
 	length := len(data)
 	bf := &message.ByteBuffer{}
 	bf.WriteInt32(int32(12 + length))
 	bf.WriteInt32(0)
-	bf.WriteInt32(ack.GetMsgId())
+	bf.WriteInt32(msg.GetMsgId())
 	bf.Write(data)
 	this.conn.Write(bf.GetBuffer())
 }
@@ -108,25 +106,25 @@ func (this *SmartClient) handleRegister(data []byte) {
 	}
 	msg := &message.RegisterReq{}
 	msg.Decode(data)
-	this.itemType = define.ItemType(msg.ItemType)
-	this.name = msg.Name
+	this.ItemType = define.ItemType(msg.ItemType)
+	this.Name = msg.Name
 	this.registed = true
 	this.sendMsg(&message.RegisterAck{Ret: message.Result_Success})
+	GetClientMgr().AddClient(this)
 	fmt.Println("设备注册成功")
 }
 
 func (this *SmartClient) handleReportStatus(data []byte) {
 	msg := &message.ReportStatusReq{}
 	msg.Decode(data)
-	fmt.Println("状态上报，名称:", this.name, ",状态:", msg.Status)
+	fmt.Println("状态上报，名称:", this.Name, ",状态:", msg.Status)
+	this.Status = msg.Status
+	eventbus.GetInstance().Publish(eventbus.Event_ItemChangeStatus, this.Uid, this.Status)
 	this.sendMsg(&message.ReportStatusAck{Ret: message.Result_Success})
-	// if msg.Status == 0 {
-	// 	this.ChangeStatus(1)
-	// }
 }
 
 func (this *SmartClient) ChangeStatus(status int32) {
-	fmt.Println("正在改变物品状态，名称:", this.name, "目标状态:", status)
+	fmt.Println("正在改变物品状态，名称:", this.Name, "目标状态:", status)
 	msg := &message.ChangeStatusPush{Status: status}
 	this.sendMsg(msg)
 }

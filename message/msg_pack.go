@@ -14,7 +14,9 @@ func PackMsg(msgId uint32, data []byte) []byte {
 	binary.LittleEndian.PutUint32(buf, uint32(length))
 	binary.LittleEndian.PutUint32(buf[4:], 0)
 	binary.LittleEndian.PutUint32(buf[8:], msgId)
-	copy(buf[12:], data)
+	if len(data) > 0 {
+		copy(buf[12:], data)
+	}
 	return buf
 }
 
@@ -22,6 +24,8 @@ func UnpackMsg(buf []byte) *MsgPack {
 	msg := &MsgPack{}
 	msg.Seq = binary.LittleEndian.Uint32(buf)
 	msg.MsgId = binary.LittleEndian.Uint32(buf[4:])
-	msg.Data = buf[8:]
+	if len(buf) > 8 {
+		msg.Data = buf[8:]
+	}
 	return msg
 }
