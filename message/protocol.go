@@ -109,7 +109,7 @@ func (this *GetSmartItemListAck) Encode() []byte {
 }
 
 func (this *GetSmartItemListAck) GetMsgId() int32 {
-	return int32(MsgId_GetSnartItemListAck)
+	return int32(MsgId_GetSmartItemListAck)
 }
 
 type SetSmartItemStatusReq struct {

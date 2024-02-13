@@ -59,7 +59,7 @@ func (this *AppClient) Start(conn net.Conn) {
 
 func (this *AppClient) ProcessMsg(msgId uint32, data []byte) {
 	switch msgId {
-	case uint32(message.MsgId_GetSnartItemListReq):
+	case uint32(message.MsgId_GetSmartItemListReq):
 		list := smart_client.GetClientMgr().GetSmartItemList()
 		ack := &message.GetSmartItemListAck{
 			Ret:   message.Result_Success,
